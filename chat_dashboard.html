@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Dzwirovaci chytrackovani</title>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f1117;color:#e2e8f0;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.header{padding:12px 18px 0;flex-shrink:0;display:flex;align-items:flex-start;justify-content:space-between}
+.header-left h1{font-size:1.1rem;font-weight:700;color:#f8fafc;letter-spacing:-.02em}
+.header-left p{font-size:.68rem;color:#334155;margin-top:1px}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#334155;margin-top:5px;flex-shrink:0}
+.sync-dot.online{background:#22c55e}
+.sync-dot.syncing{background:#f59e0b;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.tabs{display:flex;gap:5px;padding:8px 18px 0;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:7px 13px;border-radius:9px;border:none;cursor:pointer;font-size:.76rem;font-weight:600;transition:all .15s;background:#1e2330;color:#64748b;white-space:nowrap;flex-shrink:0}
+.tab:hover{background:#252d3d;color:#94a3b8}
+.tab.active{color:#fff}
+.tab[data-cat="tripiky"].active{background:#1d4ed8}
+.tab[data-cat="restaurace"].active{background:#065f46}
+.tab[data-cat="darky"].active{background:#7c2d12}
+.tab-count{display:inline-block;padding:1px 5px;border-radius:8px;font-size:.65rem;margin-left:3px;background:rgba(255,255,255,.1);color:#94a3b8}
+.tab.active .tab-count{background:rgba(255,255,255,.2);color:#fff}
+.main{display:flex;flex:1;overflow:hidden;margin-top:8px}
+
+/* LIST */
+.list-panel{width:340px;min-width:200px;border-right:1px solid #1a2035;overflow-y:auto;flex-shrink:0;display:flex;flex-direction:column}
+.list-panel::-webkit-scrollbar{width:3px}
+.list-panel::-webkit-scrollbar-thumb{background:#2d3748;border-radius:3px}
+.filter-bar{padding:7px 8px;position:sticky;top:0;background:#0f1117;z-index:10;display:flex;gap:5px;flex-shrink:0}
+.filter-bar input{flex:1;padding:6px 10px;border-radius:7px;border:1px solid #1e2a3a;background:#161b28;color:#e2e8f0;font-size:.75rem;outline:none;min-width:0}
+.filter-bar input:focus{border-color:#3b82f6}
+.filter-bar input::placeholder{color:#334155}
+.sender-filter{display:flex;gap:3px;flex-shrink:0}
+.sf-btn{padding:4px 7px;border-radius:6px;border:1px solid #1e2a3a;cursor:pointer;font-size:.64rem;font-weight:700;background:#161b28;color:#475569;transition:all .12s;white-space:nowrap}
+.sf-btn.act-all{background:#1e2330;border-color:#334155;color:#94a3b8}
+.sf-btn.act-j{background:#1e3a5f;border-color:#3b82f6;color:#60a5fa}
+.sf-btn.act-a{background:#431407;border-color:#ea580c;color:#fb923c}
+.sf-btn.act-n{background:#14291a;border-color:#16a34a;color:#4ade80}
+.list-body{flex:1;overflow-y:auto}
+.list-body::-webkit-scrollbar{width:3px}
+.list-body::-webkit-scrollbar-thumb{background:#1e2a3a;border-radius:3px}
+
+.group-label{padding:5px 11px 2px;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#334155;margin-top:2px}
+.separator{height:1px;background:#111827;margin:3px 0}
+.item{padding:7px 9px 7px 11px;cursor:pointer;border-left:3px solid transparent;transition:background .1s;display:flex;align-items:flex-start;gap:7px}
+.item:hover{background:#131929}
+.item.selected{background:#0e1f35;border-left-color:#3b82f6}
+.item.visited .item-name{color:#475569;text-decoration:line-through}
+.avatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:800;flex-shrink:0;margin-top:1px}
+.av-j{background:#1e3a5f;color:#60a5fa}
+.av-a{background:#431407;color:#fb923c}
+.av-n{background:#14291a;color:#4ade80}
+.item-main{flex:1;min-width:0}
+.item-name{font-size:.77rem;color:#cbd5e1;font-weight:500;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.item-meta{font-size:.64rem;color:#334155;display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:2px}
+.link-dot{width:5px;height:5px;border-radius:50%;background:#22c55e;flex-shrink:0}
+.dist-badge{background:#1e2a3a;color:#60a5fa;border-radius:5px;padding:1px 5px;font-size:.62rem;font-weight:600;white-space:nowrap}
+.item-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+.mini-stars{font-size:.62rem;color:#f59e0b;line-height:1;letter-spacing:-1px}
+.visited-check{font-size:.68rem;color:#22c55e}
+
+/* DETAIL */
+.detail-panel{flex:1;padding:16px 20px;overflow-y:auto}
+.detail-panel::-webkit-scrollbar{width:3px}
+.detail-panel::-webkit-scrollbar-thumb{background:#2d3748;border-radius:3px}
+.empty{display:flex;align-items:center;justify-content:center;height:100%;color:#1e293b;flex-direction:column;gap:8px}
+.empty .icon{font-size:2rem}
+.empty p{font-size:.8rem}
+
+/* BACK BUTTON (mobile only) */
+.back-btn{display:none;align-items:center;gap:6px;background:none;border:none;color:#60a5fa;font-size:.82rem;font-weight:600;cursor:pointer;padding:0 0 12px 0}
+
+.card{background:#131929;border-radius:12px;padding:18px 20px;max-width:580px;border:1px solid #1a2035}
+.card-cat{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.card-cat.tripiky{color:#60a5fa}
+.card-cat.restaurace{color:#34d399}
+.card-cat.darky{color:#fb923c}
+.card-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.sender-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:.7rem;font-weight:700}
+.sb-j{background:#1e3a5f;color:#60a5fa}
+.sb-a{background:#431407;color:#fb923c}
+.sb-n{background:#14291a;color:#4ade80}
+.date-chip{font-size:.65rem;color:#334155}
+.card-who{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.67rem;font-weight:700;background:#7c2d12;color:#fdba74;margin-bottom:8px}
+.card-title{font-size:1rem;font-weight:700;color:#f1f5f9;line-height:1.4;margin-bottom:12px}
+.dist-block{display:flex;gap:10px;margin-bottom:12px}
+.dist-item{background:#0c1524;border-radius:8px;padding:7px 12px;flex:1;text-align:center}
+.dist-item .val{font-size:1.05rem;font-weight:700;color:#60a5fa}
+.dist-item .lbl{font-size:.6rem;color:#475569;margin-top:1px;text-transform:uppercase;letter-spacing:.06em}
+.note-box{margin-top:8px;padding:8px 11px;background:#0c1524;border-radius:7px;font-size:.73rem;color:#475569;border-left:3px solid #1e3a5f}
+.open-link,.maps-link{display:inline-flex;align-items:center;gap:5px;margin-top:10px;margin-right:6px;padding:8px 14px;border-radius:8px;text-decoration:none;font-size:.75rem;font-weight:600;transition:all .12s}
+.open-link{background:#0c1524;border:1px solid #1e2a3a;color:#60a5fa}
+.open-link:hover{background:#101e38;border-color:#3b82f6}
+.maps-link{background:#0c1524;border:1px solid #1e2a3a;color:#34d399}
+.maps-link:hover{background:#0a1f14;border-color:#34d399}
+.warning{font-size:.66rem;color:#334155;margin-top:5px;font-style:italic}
+
+/* USER SECTION */
+.user-section{margin-top:14px;border-top:1px solid #1a2035;padding-top:12px;display:flex;flex-direction:column;gap:9px}
+.user-row{display:flex;align-items:center;gap:10px}
+.u-lbl{font-size:.63rem;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.05em;min-width:58px}
+.stars-widget{display:flex;gap:3px}
+.star-btn{font-size:1.15rem;cursor:pointer;background:none;border:none;padding:0;color:#1e2a3a;transition:color .1s;line-height:1;-webkit-tap-highlight-color:transparent}
+.star-btn.on{color:#f59e0b}
+.star-btn:hover{color:#fbbf24}
+.visited-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.v-box{width:18px;height:18px;border-radius:5px;border:2px solid #2d3748;background:#0c1524;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.visited-toggle.checked .v-box{background:#16a34a;border-color:#16a34a}
+.v-box svg{display:none}
+.visited-toggle.checked .v-box svg{display:block}
+.v-text{font-size:.77rem;color:#64748b}
+.visited-toggle.checked .v-text{color:#22c55e}
+.pnote-lbl{font-size:.63rem;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.pnote-ta{width:100%;background:#0c1524;border:1px solid #1e2a3a;border-radius:7px;color:#94a3b8;font-size:.75rem;padding:7px 9px;resize:vertical;min-height:55px;outline:none;font-family:inherit;line-height:1.5}
+.pnote-ta:focus{border-color:#3b82f6;color:#cbd5e1}
+.pnote-ta::placeholder{color:#1e3a5f}
+.save-hint{font-size:.61rem;color:#1e3a5f;margin-top:2px}
+
+/* RESPONSIVE */
+@media (max-width:680px){
+  body{overflow:auto}
+  .main{overflow:visible;flex-direction:column}
+  .list-panel{width:100%;border-right:none;border-bottom:1px solid #1a2035;min-height:0;max-height:none;overflow:visible}
+  .list-body{max-height:60vh;overflow-y:auto}
+  .detail-panel{
+    position:fixed;inset:0;z-index:300;background:#0f1117;
+    padding:14px 16px;overflow-y:auto;
+    display:none;transform:translateX(100%);transition:transform .2s ease
+  }
+  .detail-panel.open{display:block;transform:translateX(0)}
+  .back-btn{display:flex}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>Dzwirovaci chytrackovani</h1>
+    <p>WhatsApp 2020&ndash;2026 &middot; vzdalenosti od Dvorce (So 10:00)*</p>
+  </div>
+  <div class="sync-dot" id="sync-dot" title="Stav synchronizace"></div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-cat="tripiky" onclick="switchTab('tripiky')">&#128506; Tripiky <span class="tab-count" id="cnt-tripiky"></span></button>
+  <button class="tab" data-cat="restaurace" onclick="switchTab('restaurace')">&#127829; Restaurace &amp; Kavarny <span class="tab-count" id="cnt-restaurace"></span></button>
+  <button class="tab" data-cat="darky" onclick="switchTab('darky')">&#127873; Darky <span class="tab-count" id="cnt-darky"></span></button>
+</div>
+
+<div class="main">
+  <div class="list-panel">
+    <div class="filter-bar">
+      <input type="text" id="search" placeholder="Hledat..." oninput="renderList()">
+      <div class="sender-filter">
+        <button class="sf-btn act-all" id="sf-all" onclick="setSF('all')">Vse</button>
+        <button class="sf-btn" id="sf-j" onclick="setSF('j')">J</button>
+        <button class="sf-btn" id="sf-a" onclick="setSF('a')">A</button>
+        <button class="sf-btn" id="sf-n" onclick="setSF('n')">N</button>
+      </div>
+    </div>
+    <div class="list-body" id="list-body"></div>
+  </div>
+  <div class="detail-panel" id="detail">
+    <div class="empty"><div class="icon">&#128072;</div><p>Vyber polozku vlevo</p></div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  FIREBASE SETUP
+//  1. Jdi na console.firebase.google.com → Vytvoř projekt
+//  2. Přidej webovou aplikaci → Zkopíruj config objekt
+//  3. Vlož config níže (přepiš prázdné řetězce svými hodnotami)
+//  4. V Firebase Console → Realtime Database → Vytvoř databázi
+//     (začni v testovacím režimu → platí 30 dní, pak nastav pravidla)
+//  5. Nasaď HTML na Netlify (netlify.com → Add new site → drag & drop)
+// ════════════════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  databaseURL: "",   // napr. "https://muj-projekt-default-rtdb.europe-west1.firebasedatabase.app"
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+
+const D = {"tripiky": [{"name": "Tocna", "date": "16.07.2022", "sender": "Josh", "url": "https://mapy.cz/turisticka?q=tocna", "km": 8, "dur": "12 min"}, {"name": "Letohradek Belveder (kaple sv. Jana Krtitele)", "date": "24.10.2020", "sender": "Josh", "url": "https://www.prague.eu/cs/objekt/mista/755/letohradek-belveder", "km": 9, "dur": "15 min"}, {"name": "Skalka (Mnisek pod Brdy)", "date": "12.02.2021", "sender": "Josh", "url": "https://www.skalkaresort.cz/", "km": 27, "dur": "25 min"}, {"name": "Spomysl - Zidovsky hrbitov", "date": "07.05.2022", "sender": "Josh", "url": "https://mapy.cz/turisticka?q=spomysl", "km": 42, "dur": "38 min"}, {"name": "Nizborska zastávka (sez. restaurace)", "date": "01.11.2020", "sender": "Josh", "url": "https://www.nizborska-keramika.cz/", "km": 40, "dur": "40 min"}, {"name": "Ranc u ricky Krounky", "date": "21.11.2020", "sender": "Josh", "url": "https://lesycr.cz/casopis-clanek/vylet-udolim-ricky-krounky-pod-hradem-rychmburk/", "km": 140, "dur": "1h 32 min"}, {"name": "Zamek Breznice", "date": "04.03.2023", "sender": "Josh", "url": "https://www.zamek-breznice.cz/", "km": 70, "dur": "55 min"}, {"name": "Prihrazske skaly", "date": "06.02.2022", "sender": "Andreika", "url": "https://www.kudyznudy.cz/aktivity/prihrazske-skaly", "km": 78, "dur": "1h 02 min"}, {"name": "Zviretice u Mnichova Hradiste", "date": "21.01.2021", "sender": "Andreika", "url": "https://www.hrad-zviretice.cz/", "km": 73, "dur": "58 min"}, {"name": "Valecov", "date": "04.01.2022", "sender": "Andreika", "url": "https://www.kudyznudy.cz/aktivity/hrad-valecov", "km": 70, "dur": "55 min"}, {"name": "Mlyn Pricovy", "date": "29.01.2022", "sender": "Andreika", "url": "https://www.kudyznudy.cz/aktivity/mlyn-pricovy", "km": 78, "dur": "1h 05 min"}, {"name": "Bechyne", "date": "22.01.2022", "sender": "Andreika", "url": "https://www.bechyne.cz/turistika", "km": 92, "dur": "1h 10 min"}, {"name": "Zidova strouha - u Tabora", "date": "12.03.2022", "sender": "Andreika", "url": "https://www.kudyznudy.cz/aktivity/zidova-strouhakutny", "km": 88, "dur": "1h 05 min"}, {"name": "Usta pravdy - Lipnice nad Sazavou", "date": "28.12.2021", "sender": "Andreika", "url": "https://www.kudyznudy.cz/aktivity/usta-pravdy", "km": 115, "dur": "1h 18 min"}, {"name": "Lichnice Castle ruins", "date": "18.07.2021", "sender": "Josh", "url": "https://www.kudyznudy.cz/aktivity/hrad-lichnice", "km": 130, "dur": "1h 28 min"}, {"name": "Hrad Oheb - zricenina", "date": "18.07.2021", "sender": "Josh", "url": "https://www.kudyznudy.cz/aktivity/hrad-oheb", "km": 132, "dur": "1h 30 min"}, {"name": "Havlova skala - Vyhledy (Jetríkovice)", "date": "22.10.2022", "sender": "Josh", "url": "https://goo.gl/maps/VvRJdFFWZwdtFDyv9", "km": 135, "dur": "1h 35 min"}, {"name": "Modlivy dul Svojkov", "date": "01.11.2020", "sender": "Josh", "url": "https://www.bohemian-switzerland.com/", "km": 130, "dur": "1h 35 min"}, {"name": "Edmundova soutestka", "date": "26.03.2022", "sender": "Andreika", "url": "https://www.npcs.cz/cs/co-navstivit/prirodni-zajimavosti/edmundova-soutesta", "km": 138, "dur": "1h 38 min"}, {"name": "Ostravske skaly - Tisa (C. Svycarsko)", "date": "27.06.2023", "sender": "Andreika", "url": "https://www.kudyznudy.cz/aktivity/tisske-steny", "km": 140, "dur": "1h 42 min"}, {"name": "Rosenthal-Bielatal (Nemecko)", "date": "18.07.2021", "sender": "Josh", "url": "https://www.saechsische-schweiz.de/", "km": 143, "dur": "1h 48 min"}, {"name": "Stara plynarna Hrensko", "date": "22.04.2022", "sender": "Josh", "url": "https://www.hrensko.cz/", "km": 132, "dur": "1h 38 min"}, {"name": "Adrsbach - skalni divadlo", "date": "07.01.2021", "sender": "Josh", "url": "https://www.skalnimesto.cz/", "km": 162, "dur": "1h 52 min"}, {"name": "Iqlandia Liberec (indoor s Eliskou)", "date": "27.10.2025", "sender": "Josh", "url": "https://iqlandia.cz/", "km": 103, "dur": "1h 12 min"}, {"name": "Helfstyn Castle", "date": "18.07.2021", "sender": "Josh", "url": "https://www.helfstyn.cz/", "km": 262, "dur": "2h 40 min"}, {"name": "Jeseniky - Giant Stones", "date": "28.10.2022", "sender": "Josh", "url": "https://www.jesenik.org/", "km": 225, "dur": "2h 28 min"}, {"name": "Waterfalls White Opava", "date": "02.04.2023", "sender": "Josh", "url": "https://www.kudyznudy.cz/aktivity/vodopad-bila-opava", "km": 220, "dur": "2h 22 min"}, {"name": "Zoo Sedlec u Mikulova (jizni Morava)", "date": "07.06.2026", "sender": "Andreika", "url": "https://www.zoo-sedlec.cz/", "km": 264, "dur": "2h 35 min"}, {"name": "Zelena hora u Zdaru", "date": "02.04.2023", "sender": "Andreika", "url": "https://www.zamek-zelena-hora.cz/", "km": 138, "dur": "1h 42 min"}, {"name": "Thal (Steiermark, Rakousko)", "date": "18.07.2021", "sender": "Josh", "url": "https://www.steiermark.com/", "km": 400, "dur": "3h 50 min"}, {"name": "Dachstein (Ramsau) - Rakousko", "date": "15.01.2025", "sender": "Andreika", "url": "https://cooee-alpin.com/dachstein/", "km": 358, "dur": "3h 28 min"}, {"name": "Kufstein Fortress - Rakousko", "date": "12.06.2024", "sender": "Josh", "url": "https://www.festung.kufstein.at/", "km": 468, "dur": "4h 25 min"}, {"name": "Innska cyklo (Innsbruck)", "date": "14.06.2021", "sender": "Josh", "url": "https://www.innsbruck.info/", "km": 540, "dur": "4h 55 min"}, {"name": "Torrechiara Castle - Italie", "date": "26.10.2022", "sender": "Josh", "url": "https://www.castellotorrechiara.it/", "km": 955, "dur": "8h 45 min"}, {"name": "Palazzo Mannocchi - Le Marche, Italie", "date": "18.07.2021", "sender": "Josh", "url": "https://www.palazzomannocchi.com/", "km": 1140, "dur": "10h 20 min"}, {"name": "Saturnia hot springs - Toskansko, Italie", "date": "27.01.2025", "sender": "Josh", "url": "https://www.thermedisaturnia.it/", "km": 1320, "dur": "12h 10 min"}, {"name": "Bari - Apulie, Italie", "date": "09.05.2024", "sender": "Josh", "url": "https://www.viaggiareinpuglia.it/", "km": 1680, "dur": "15h 25 min"}, {"name": "Carew Castle & Tidal Mill - Wales", "date": "28.11.2023", "sender": "Josh", "url": "https://www.carewcastle.com/", "km": 1780, "dur": "17h 40 min"}, {"name": "Scotland", "date": "21.01.2024", "sender": "Josh", "url": "https://www.visitscotland.com/", "km": 1900, "dur": "~19h"}, {"name": "Svycarsko", "date": "10.07.2022", "sender": "Josh", "url": "https://www.myswitzerland.com/", "km": 750, "dur": "7h 00 min"}, {"name": "Pyreneje", "date": "16.08.2022", "sender": "Josh", "url": "https://www.pyrenees.com/", "km": 1750, "dur": "~17h"}, {"name": "Norway", "date": "02.08.2025", "sender": "Josh", "url": "https://www.visitnorway.com/", "km": 2100, "dur": "~21h"}, {"name": "Raja Ampat - Indonesie", "date": "25.11.2023", "sender": "Josh", "url": "https://www.rajaampat.org/", "km": null, "dur": "nelze autem"}, {"name": "Praha (vylet v Praze)", "date": "26.06.2023", "sender": "Josh", "url": "https://www.prague.eu/", "km": 0, "dur": "v Praze"}, {"name": "Glamping Brdy", "date": "16.12.2024", "sender": "Josh", "url": "https://www.kudyznudy.cz/aktivity/brdy", "km": 42, "dur": "40 min"}, {"name": "Slovinsko - top mista", "date": "02.04.2023", "sender": "Josh", "url": "https://www.objevuj-slovinsko.cz/top-mista/", "km": 950, "dur": "9h 00 min"}, {"name": "Zlata stezka Ceskeho raje", "date": "21.06.2023", "sender": "Josh", "url": "https://www.kudyznudy.cz/aktivity/zlata-stezka-ceskeho-raje", "km": 88, "dur": "1h 12 min"}, {"name": "Tripik CZ Elis (penzion)", "date": "19.06.2024", "sender": "Josh", "url": "https://maps.app.goo.gl/X2ToMQoJuodRta7N7?g_st=ic", "km": null, "dur": "viz odkaz"}, {"name": "Tripik Italie (jesen 2024)", "date": "19.10.2024", "sender": "Josh", "url": "https://maps.app.goo.gl/iN3WDCBTwX8YhY7Y9?g_st=ic", "km": null, "dur": "viz odkaz"}, {"name": "Tripik (prosinec 2024 A)", "date": "08.12.2024", "sender": "Josh", "url": "https://maps.app.goo.gl/Bh1oTos6TwKRYGMPA?g_st=ic", "km": null, "dur": "viz odkaz"}, {"name": "Tripik (prosinec 2024 B)", "date": "24.12.2024", "sender": "Josh", "url": "https://maps.app.goo.gl/YdVXdaRNFeVtGm5HA?g_st=ic", "km": null, "dur": "viz odkaz"}, {"name": "Statek u Merlina - zviratka (Elis)", "date": "17.04.2025", "sender": "Andreika", "url": "https://www.statekumerlina.eu/kontakt/", "km": 42, "dur": "50 min"}, {"name": "Bylandia - indoor (Elis)", "date": "17.04.2025", "sender": "Andreika", "url": "https://www.bylandia.cz", "km": 25, "dur": "35 min"}, {"name": "Tripik (kveten 2025)", "date": "23.05.2025", "sender": "Josh", "url": "https://maps.app.goo.gl/rsSzV1PavsbdAjh8A?g_st=iw", "km": null, "dur": "viz odkaz"}, {"name": "Tripik (cervenec 2025)", "date": "12.07.2025", "sender": "Josh", "url": "https://maps.app.goo.gl/7LPUT3yNQgsUQ4Ty9?g_st=ic", "km": null, "dur": "viz odkaz"}, {"name": "Penzion Novy Rybnik - rodinny (lastminute)", "date": "20.06.2026", "sender": "Josh", "url": "https://www.penzionnoverybnik.cz/", "km": 45, "dur": "52 min"}, {"name": "Tripik s bazenkem (biotop)", "date": "20.06.2026", "sender": "Josh", "url": "https://maps.app.goo.gl/uwTLUN2Ub54kkzBs9?g_st=ic", "km": null, "dur": "viz odkaz"}, {"name": "Tripik (juni 2026, viz odkaz)", "date": "20.06.2026", "sender": "Josh", "url": "https://maps.app.goo.gl/AMDNTvZzGsE9FpFY7?g_st=ic", "km": null, "dur": "viz odkaz"}, {"name": "Gesaeuse NP - Rakousko (Andreika)", "date": "24.06.2026", "sender": "Andreika", "url": "https://www.gesaeuse.at/", "km": 330, "dur": "3h 20 min"}, {"name": "Lom Kojetice - vedro, Elis, pes", "date": "25.06.2026", "sender": "Josh", "url": "https://maps.app.goo.gl/oDGdK8RsgpxQvvu96?g_st=ic", "km": 22, "dur": "32 min"}, {"name": "Labska marketa (tripik)", "date": "01.07.2026", "sender": "Josh", "url": null, "km": null, "dur": "viz foto"}], "restaurace": [{"name": "Zelena Zahrada", "date": "27.11.2020", "sender": "Josh", "note": "Smilovskeho 1427, Praha 2-Vinohrady | 222 518 159", "url": "https://goo.gl/maps/oouPsT4F25RwMrZw8"}, {"name": "El Camino Tapas Restaurant", "date": "02.12.2020", "sender": "Josh", "note": "Jagellonska 10, Praha 3-Vinohrady | 725 543 717", "url": "https://goo.gl/maps/7MArTxiGED4yckAc8"}, {"name": "Yoshihashi Sushi", "date": "05.03.2021", "sender": "Josh", "note": "722 654 007", "url": "https://goo.gl/maps/g51aKbtMoVxfHrSF7"}, {"name": "Thajska restaurace Noi", "date": "14.02.2021", "sender": "Josh", "note": "Ujezd 409/19, Praha 1 - Mala Strana", "url": "https://noirestaurant.cz/"}, {"name": "Kavarna Narodni 38", "date": "14.02.2021", "sender": "Josh", "note": "Narodni 37/38, Praha 1", "url": "https://www.narodni38.cz/"}, {"name": "Cafe Bombole + crownut", "date": "14.02.2021", "sender": "Josh", "note": "", "url": "https://goo.gl/maps/ZthDq6e3K3hGaZX49"}, {"name": "Indicka restaurace Tandoor", "date": "02.10.2021", "sender": "Josh", "note": "", "url": "https://goo.gl/maps/krv1goCnbJDHPviE9"}, {"name": "Yusuf Kitchen Prague", "date": "26.10.2021", "sender": "Andreika", "note": "Vrsovice - syrsky bistro", "url": "https://www.facebook.com/p/YUSUF-Kitchen-prague-100071030702339/"}, {"name": "Ristorante Gastronomia i Trulli", "date": "20.12.2021", "sender": "Josh", "note": "pry top tiramisu ve meste | 727 983 917", "url": "https://goo.gl/maps/YS97ZgmbK53sYcW4A"}, {"name": "FatFuck", "date": "06.01.2022", "sender": "Andreika", "note": "", "url": "https://fatfuck.choiceqr.com"}, {"name": "Arepas de Lyna", "date": "23.01.2022", "sender": "Andreika", "note": "Korunni 1173/83, Vinohrady - venezuelske arepas", "url": "https://www.arepasdelyna.cz/"}, {"name": "Namka - kaficko, dort, Cafe de Paris", "date": "05.04.2022", "sender": "Andreika", "note": "", "url": "https://www.facebook.com/namkaprague/"}, {"name": "Restaurace Trezor Spork / Cerveny jelen", "date": "10.04.2022", "sender": "Andreika", "note": "Hybernska, Praha 1 - v trezoru palace Spork", "url": "https://www.trezorspork.cz/"}, {"name": "Cafe Modrany", "date": "29.04.2022", "sender": "Josh", "note": "", "url": "https://www.facebook.com/search/top?q=caf%C3%A9%20modr%C3%A1ny"}, {"name": "Vegan's Prague", "date": "11.06.2022", "sender": "Josh", "note": "735 171 713", "url": "https://goo.gl/maps/s4cPXCjYUKsJpKFy6"}, {"name": "Restaurace - kachna", "date": "14.10.2023", "sender": "Josh", "note": "", "url": "https://maps.app.goo.gl/5dECa3ez6vxsZZmm7"}, {"name": "Zahradni restaurace Vila Vojkov", "date": "18.06.2025", "sender": "Josh", "note": "", "url": "https://maps.app.goo.gl/119xQKrYFx7Nt2XSA"}, {"name": "Resort Pospolu - asijska restaurace", "date": "09.11.2025", "sender": "Andreika", "note": "30 min od Prahy", "url": "https://www.resortpospolu.cz/"}, {"name": "Hospoda Muhu", "date": "02.05.2024", "sender": "Andreika", "note": "Bedrichov, Jizerske hory", "url": "https://hospodamuhu.cz/"}, {"name": "Nadivoko", "date": "16.03.2025", "sender": "Andreika", "note": "Kvilda 31, Sumava - kuchyne z mistnich surovin", "url": "https://www.kvilda-nadivoko.cz/"}, {"name": "Bistro Karel", "date": "06.06.2026", "sender": "Josh", "note": "U Trojskeho zamku 2/6, Troja - rodinne bistro v zahrade", "url": "https://www.bistrokarel.cz/"}, {"name": "Kavarna Cekarna", "date": "06.06.2026", "sender": "Josh", "note": "Vratislavova 30/8, Praha 2 - pod Vysehradem, zahrada", "url": "https://europeancoffeetrip.com/cafe/kavarnacekarna-prague/"}, {"name": "Vila 63", "date": "06.06.2026", "sender": "Josh", "note": "Hradesinska 63, Vinohrady - kavarna v prvorepublikove vile", "url": "https://www.vila63.cz/"}, {"name": "Kuchyn (Ambiente)", "date": "06.06.2026", "sender": "Josh", "note": "Hradcanske nam. 1, Praha 1 - bez menu, volis z hrncu", "url": "https://kuchyn.ambi.cz/"}, {"name": "U Mateje", "date": "06.06.2026", "sender": "Josh", "note": "U Mateje 1, Dejvice - Michelin Bib Gourmand", "url": "https://www.umateje1.cz/"}, {"name": "Etapa", "date": "06.06.2026", "sender": "Josh", "note": "Karlin - cafe & bistro od PG Foodies", "url": "https://www.etapa.cz/"}, {"name": "Alma", "date": "06.06.2026", "sender": "Josh", "note": "V Jircharich, Praha 1 - restaurace, kavarna, vinarna", "url": "https://www.almaprague.cz/"}, {"name": "Osada", "date": "06.06.2026", "sender": "Josh", "note": "Osadni 35, Holesovice - specialty coffee Nordbeans", "url": "https://www.osada.cz/"}, {"name": "Salabka", "date": "06.06.2026", "sender": "Josh", "note": "K Bohnicim 2, Troja - vinice a restaurace, Michelin", "url": "https://salabka.cz/"}, {"name": "Slechtova restaurace (zachytny bod Stromovka)", "date": "06.09.2021", "sender": "Andreika", "note": "", "url": "https://mapy.cz/turisticka?q=%C5%A0lechtova+restaurace"}, {"name": "Bistro Monk 2", "date": "Nuttela notes", "sender": "Nuttela", "note": "epic brunch, Maltezske namko, Mala strana", "url": null}, {"name": "Kampa Cafe", "date": "Nuttela notes", "sender": "Nuttela", "note": "brunch", "url": null}, {"name": "Smetana Q", "date": "Nuttela notes", "sender": "Nuttela", "note": "brunch & waffles", "url": null}, {"name": "Malby's Cafe", "date": "Nuttela notes", "sender": "Nuttela", "note": "kubanska kavarna a bistro", "url": null}, {"name": "Habibi Bistro", "date": "Nuttela notes", "sender": "Nuttela", "note": "pod Vysehradem", "url": null}, {"name": "Steakovy a pivni bar Pod lekarnou", "date": "Nuttela notes", "sender": "Nuttela", "note": "Brno, steaky do 4 h", "url": null}, {"name": "Katr", "date": "Nuttela notes", "sender": "Nuttela", "note": "stoly s grilem", "url": null}, {"name": "The Monkey Bar Prague", "date": "Nuttela notes", "sender": "Nuttela", "note": "brunch & live music, crazy funky", "url": null}, {"name": "Sodo", "date": "Nuttela notes", "sender": "Nuttela", "note": "yum", "url": null}, {"name": "The Spot Mala Strana", "date": "Nuttela notes", "sender": "Nuttela", "note": "cute vynutana kavarna", "url": null}, {"name": "Savour", "date": "Nuttela notes", "sender": "Nuttela", "note": "brunch & cafe Andel, Asian fusion", "url": null}, {"name": "Mysak", "date": "Nuttela notes", "sender": "Nuttela", "note": "cukrarna, buchty se sodo", "url": null}, {"name": "Happy Noodles & Sushi", "date": "Nuttela notes", "sender": "Nuttela", "note": "obr porce za cheap, Holesovice", "url": null}, {"name": "Hospoda Na Louzi", "date": "Nuttela notes", "sender": "Nuttela", "note": "Krumlov, staroceska", "url": null}, {"name": "James Dean", "date": "Nuttela notes", "sender": "Nuttela", "note": "i brunch", "url": null}, {"name": "Ensaimada", "date": "Nuttela notes", "sender": "Nuttela", "note": "nej dezert z Mallorcy", "url": null}, {"name": "Hoxton Burgers", "date": "Nuttela notes", "sender": "Nuttela", "note": "Mirak, cedar politej burger, Kluci z Prahy", "url": null}, {"name": "Burgerman", "date": "Nuttela notes", "sender": "Nuttela", "note": "Holesovice, Kluci z Prahy", "url": null}, {"name": "Zahradka U Pinkasu", "date": "Nuttela notes", "sender": "Nuttela", "note": "skryta za Kostelem Panny Marie Snezne u Frantiskanskych zahrad", "url": null}, {"name": "Kafec Brno", "date": "Nuttela notes", "sender": "Nuttela", "note": "zahradka, super staff, kafe a brunch celej den", "url": null}, {"name": "Just Wine", "date": "Nuttela notes", "sender": "Nuttela", "note": "super vinarna Brno", "url": null}, {"name": "Tapas Bar Brno", "date": "Nuttela notes", "sender": "Nuttela", "note": "zajimave cute tapas", "url": null}, {"name": "Podnik Brno", "date": "Nuttela notes", "sender": "Nuttela", "note": "kafe, vino, breakfast till 11:30, lunch od 3 pm & snacks", "url": null}, {"name": "Ha Su Sushi", "date": "Nuttela notes", "sender": "Nuttela", "note": "drazsi nez wok, ale good ceny poke, zajimave rolls, super sweet staff", "url": null}, {"name": "Korunka U Arbesa", "date": "Nuttela notes", "sender": "Nuttela", "note": "super jidelna na Arbesaku, cely menu za 212 CZK", "url": null}, {"name": "Reznicka jidelna", "date": "Nuttela notes", "sender": "Nuttela", "note": null, "url": null}, {"name": "Ca-Phe-Co", "date": "Nuttela notes", "sender": "Nuttela", "note": "asijska v Brne od Ivci", "url": null}, {"name": "Mexicka Holesovice", "date": "Nuttela notes", "sender": "Nuttela", "note": null, "url": null}, {"name": "Mama's Burger", "date": "Nuttela notes", "sender": "Nuttela", "note": "Polreich's", "url": null}, {"name": "Next Door", "date": "Nuttela notes", "sender": "Nuttela", "note": "Polreich's", "url": null}, {"name": "Korunka Brno", "date": "Nuttela notes", "sender": "Nuttela", "note": "Brnenska cajovna", "url": null}, {"name": "Carosello", "date": "Nuttela notes", "sender": "Nuttela", "note": "vyborne italiana Praha Strasnice", "url": null}, {"name": "EtCorner", "date": "Nuttela notes", "sender": "Nuttela", "note": "etiopska restaurace na Zizkove", "url": null}, {"name": "Barka", "date": "Nuttela notes", "sender": "Nuttela", "note": "recka restaurace od Masona H, pod Grebovkou, vyborne jidlo, i brunch", "url": null}, {"name": "Alambre", "date": "Nuttela notes", "sender": "Nuttela", "note": "mexicka restaurace, Synkac", "url": null}, {"name": "Bistro B", "date": "Nuttela notes", "sender": "Nuttela", "note": "cute interior, u metra Budejovicka", "url": null}, {"name": "Brambory", "date": "Nuttela notes", "sender": "Nuttela", "note": "Pankrac", "url": null}, {"name": "Rollie", "date": "Nuttela notes", "sender": "Nuttela", "note": "rolovana zmrzka, kousek od Quadria", "url": null}, {"name": "Fasu Pizzerie", "date": "Nuttela notes", "sender": "Nuttela", "note": "Nusle, Ostrcilovo namesti, neapolska pizza", "url": null}, {"name": "Terraza Coffee Bar & Restaurant", "date": "Nuttela notes", "sender": "Nuttela", "note": "Plzen, cheap breakfast do 11, vyhled na namko & vez", "url": null}, {"name": "Jidlovice v Dejvicich", "date": "Nuttela notes", "sender": "Nuttela", "note": "tacovej obed 175 CZK, jit v 10:45, mega fronty", "url": null}, {"name": "Lasagneria", "date": "Nuttela notes", "sender": "Nuttela", "note": "Vinohrady", "url": null}, {"name": "Vnitroblok", "date": "Nuttela notes", "sender": "Nuttela", "note": "Holesovice", "url": null}, {"name": "Gram", "date": "Nuttela notes", "sender": "Nuttela", "note": "Vinohrady", "url": null}, {"name": "Hermanos", "date": "Nuttela notes", "sender": "Nuttela", "note": "mexicka, Brno stare mesto", "url": null}, {"name": "Sou100 Zizkov", "date": "Nuttela notes", "sender": "Nuttela", "note": "Paulie's fav", "url": null}, {"name": "Bukowski", "date": "Nuttela notes", "sender": "Nuttela", "note": "Paulie's sailor bar", "url": null}, {"name": "Khao", "date": "Nuttela notes", "sender": "Nuttela", "note": "Asian, Andel, Paulie's", "url": null}, {"name": "BON Fresh Ramen & Soba", "date": "Nuttela notes", "sender": "Nuttela", "note": "cold soba noodles, 3 pobocky", "url": null}, {"name": "Tasca Plzen", "date": "Nuttela notes", "sender": "Nuttela", "note": "brunch & restaurace namko Plzen", "url": null}, {"name": "Frenchie Namesti Plzen", "date": "Nuttela notes", "sender": "Nuttela", "note": "dalsi pobocka Plzen na brunch", "url": null}, {"name": "Dian", "date": "Nuttela notes", "sender": "Nuttela", "note": "Asian fusion Pankrac, shared for more people", "url": null}, {"name": "Palatino", "date": "Nuttela notes", "sender": "Nuttela", "note": "italska restaurace Pankrac, 15 min peso, steak 400 CZK, seafood great", "url": null}, {"name": "Vapiano", "date": "Nuttela notes", "sender": "Nuttela", "note": "lunches 175 Kc pasta, 209 Kc s meat, also pizza", "url": null}, {"name": "Imaginarni zmrzlina", "date": "Nuttela notes", "sender": "Nuttela", "note": "gelato 65 CZK za 2 scoops, Sokolovska/Florenc", "url": null}, {"name": "Eaternia", "date": "Nuttela notes", "sender": "Nuttela", "note": "veganska restaurace na Smichove", "url": null}, {"name": "Puro Gelato Vytoň", "date": "Nuttela notes", "sender": "Nuttela", "note": "namichej si vlastni tocenenou zmrzku + posypky, pay dle vahy", "url": null}, {"name": "Bowl & Tonic", "date": "Nuttela notes", "sender": "Nuttela", "note": "poke, Slavikova, Praha 2", "url": null}, {"name": "Supernova Bakehouse", "date": "Nuttela notes", "sender": "Nuttela", "note": "metro Nadrazi Holesovice", "url": null}, {"name": "Napoke", "date": "Nuttela notes", "sender": "Nuttela", "note": "Italska ulice", "url": null}, {"name": "Ngo", "date": "Nuttela notes", "sender": "Nuttela", "note": "vietnamska nam Miru", "url": null}, {"name": "Cihelna Italska", "date": "Nuttela notes", "sender": "Nuttela", "note": "Karlinské namesti", "url": null}, {"name": "Alforno", "date": "Nuttela notes", "sender": "Nuttela", "note": "Foccaceria italiana, Old Town, kostkovane ubrusy", "url": null}, {"name": "Tribistro", "date": "Nuttela notes", "sender": "Nuttela", "note": "cute healthy bistro JzP, denni menu s polevkou 220 Kc", "url": null}, {"name": "Bombay Express Flora", "date": "Nuttela notes", "sender": "Nuttela", "note": "real good naan wrap 140 Kc + mila staff", "url": null}, {"name": "Antoninovo pekarstvi", "date": "Nuttela notes", "sender": "Nuttela", "note": "Karlinské namesti, polevka, chleby a pomazanky, dezerty", "url": null}, {"name": "Au Gourmand", "date": "Nuttela notes", "sender": "Nuttela", "note": "boulangerie, patisserie Stare mesto", "url": null}, {"name": "Le Terroir", "date": "Nuttela notes", "sender": "Nuttela", "note": "hodne fancy restaurace Stare Mesto", "url": null}, {"name": "Bulka restaurace", "date": "Nuttela notes", "sender": "Nuttela", "note": "burgery 200-220, Zizkov", "url": null}, {"name": "Spejle", "date": "Nuttela notes", "sender": "Nuttela", "note": "Jindrisska, trochu fancy, 600 CZK/person, platit dle spejli", "url": null}, {"name": "Chutney restaurace", "date": "Nuttela notes", "sender": "Nuttela", "note": null, "url": null}, {"name": "O mai", "date": "Nuttela notes", "sender": "Nuttela", "note": "brunch, Vinohrady", "url": null}, {"name": "Quick and Easy", "date": "Nuttela notes", "sender": "Nuttela", "note": "cheap healthy bistro, Karlinské namko, salaty, wrapy a soups", "url": null}, {"name": "Sushi Time Pankrac", "date": "Nuttela notes", "sender": "Nuttela", "note": "Happy Hour za 50% 20:30-21:00", "url": null}, {"name": "The Italians", "date": "Nuttela notes", "sender": "Nuttela", "note": "wine & food Smichov, gorgeous green Denver-like dvur", "url": null}, {"name": "Lovely Day Bistro", "date": "Nuttela notes", "sender": "Nuttela", "note": "Holesovice, mega hipsta cute", "url": null}, {"name": "Highland", "date": "Nuttela notes", "sender": "Nuttela", "note": "cheap & great steak near Flora", "url": null}, {"name": "La Chica Mexicana", "date": "Nuttela notes", "sender": "Nuttela", "note": "bozi mexicka v Plzni + margarity", "url": null}, {"name": "Kofarna", "date": "Nuttela notes", "sender": "Nuttela", "note": "od Lauren", "url": null}, {"name": "Senkyrna Hlubina Andel", "date": "Nuttela notes", "sender": "Nuttela", "note": "150 lunch menu, also weekend", "url": null}, {"name": "Pizzeria Giovanni", "date": "Nuttela notes", "sender": "Nuttela", "note": "cute misto, Stare mesto", "url": null}, {"name": "Puro Grebovka", "date": "Nuttela notes", "sender": "Nuttela", "note": "blizko Grebovky, zmrzka", "url": null}, {"name": "Hillbilly", "date": "Nuttela notes", "sender": "Nuttela", "note": "Hamburgery", "url": null}, {"name": "Creperie U slepe kocicky", "date": "Nuttela notes", "sender": "Nuttela", "note": null, "url": null}, {"name": "Na Kvetnici", "date": "Nuttela notes", "sender": "Nuttela", "note": "studenti", "url": null}, {"name": "Mimosa Ristorante", "date": "Nuttela notes", "sender": "Nuttela", "note": "italska trattoria u Mustku, dobre ceny na lunch menu", "url": null}, {"name": "Beef Bar", "date": "Nuttela notes", "sender": "Nuttela", "note": "naproti Medvidkum, argentinsky hovezi", "url": null}, {"name": "Dock House", "date": "Nuttela notes", "sender": "Nuttela", "note": "steakhouse", "url": null}, {"name": "Sasy.re", "date": "Nuttela notes", "sender": "Nuttela", "note": "Neapol pizza metr", "url": null}, {"name": "U Havlicku", "date": "Nuttela notes", "sender": "Nuttela", "note": "u Kapitolu, ceska vyborne", "url": null}, {"name": "Sushi v Dushi", "date": "Nuttela notes", "sender": "Nuttela", "note": "Holesovice, Terminal Radotin guy", "url": null}, {"name": "Kro Kitchen", "date": "Nuttela notes", "sender": "Nuttela", "note": "kure", "url": null}, {"name": "Bockem", "date": "Nuttela notes", "sender": "Nuttela", "note": "kavarna a jidla", "url": null}, {"name": "Letka", "date": "Nuttela notes", "sender": "Nuttela", "note": "kavarna", "url": null}, {"name": "Sklizeno", "date": "Nuttela notes", "sender": "Nuttela", "note": "Westfield a kousek od Dhaba Beas", "url": null}, {"name": "U rodinneho krbu", "date": "Nuttela notes", "sender": "Nuttela", "note": "presTyden, i healthy", "url": null}, {"name": "Metro Pizza Cernosice", "date": "Nuttela notes", "sender": "Nuttela", "note": "nej pizza dle Lenky, u Karlstejna", "url": null}], "darky": [{"who": "Mamka (Andreicina)", "name": "Tescoma zdob. trysky Delicia 13 ks nerezove", "date": "22.11.2020", "sender": "Andreika", "url": "https://eshop.tescoma.cz/zdobici-trysky-delicia-13-ks-nerezove"}, {"who": "Mamka (Andreicina)", "name": "Berankove mikiny mkluzkoviny.cz (kod Simona20)", "date": "16.11.2023", "sender": "Andreika", "url": "https://www.mkluzkoviny.cz/berankove-mikiny-1685/"}, {"who": "Mamka (Joshova)", "name": "Kniha Panda a dracek - Luxor", "date": "09.05.2022", "sender": "Andreika", "url": "https://www.luxor.cz/product/panda-a-dracek-zbo000450998"}, {"who": "Mamka (Joshova)", "name": "Knihy z rosier.cz", "date": "19.05.2022", "sender": "Andreika", "url": "https://www.rosier.cz/"}, {"who": "Mamka (Joshova)", "name": "Mark Ryden batohy", "date": "30.11.2023", "sender": "Josh", "url": "https://mark-ryden.cz/kategorie-produktu/vsechny-batohy/"}, {"who": "Mamka (Joshova)", "name": "Divadlo ABC - Hamlet (Beata Kanakova)", "date": "17.02.2026", "sender": "Josh", "url": "https://www.mestskadivadlaprazska.cz/inscenace/1511/hamlet/"}, {"who": "Tata (Joshuv)", "name": "Cestinarske speky (Facebook)", "date": "11.02.2023", "sender": "Josh", "url": "https://www.facebook.com/cestinarske.speky"}, {"who": "Tata (Joshuv)", "name": "Apple MagSafe Battery Pack", "date": "26.11.2023", "sender": "Josh", "url": "https://www.alza.cz/apple-magsafe-battery-pack-d6630889.htm"}, {"who": "Tata (Joshuv)", "name": "Kniha: Muj zivot v Severni Koreji", "date": "06.09.2024", "sender": "Josh", "url": "https://www.databazeknih.cz/knihy/muj-zivot-v-severni-koreji-526052"}, {"who": "Linda", "name": "Puzzle Ravensburger - Ledove kralovstvi 100 dilku", "date": "23.11.2021", "sender": "Andreika", "url": "https://www.mall.cz/puzzle-pro-deti-do-100-dilku/ravensburger-puzzle-128679-disney-ledove-kralovstvi-2-100-dilku"}, {"who": "Linda", "name": "Puzzle Ludattica - Lesni sampioni 108 dilku", "date": "24.11.2021", "sender": "Andreika", "url": "https://www.chytraopicka.cz/p/puzzle-pro-deti-ludattica-lesni-sampioni-108-dilu"}, {"who": "Linda", "name": "O velike repe - stinosvet.cz", "date": "14.12.2021", "sender": "Josh", "url": "https://www.stinosvet.cz/o-velike-repe/"}, {"who": "Linda", "name": "Cestovni hra GUMP", "date": "27.05.2024", "sender": "Josh", "url": "https://www.luxor.cz/v/1993391/gump-jsme-dvojka-cestovni-hra"}, {"who": "Eda", "name": "Play-Doh Wheels nakladac", "date": "23.11.2021", "sender": "Andreika", "url": "https://m.alza.cz/hracky/play-doh-wheels-nakladac-d6707303.htm"}, {"who": "Eda", "name": "Georello Tech 266 dilku", "date": "03.08.2024", "sender": "Andreika", "url": "https://www.agatinsvet.cz/georello-tech-266-dilu/"}, {"who": "Eda", "name": "Logic Case startovaci sada 6", "date": "03.08.2024", "sender": "Andreika", "url": "https://www.agatinsvet.cz/logic-case-startovaci-sada-6/"}, {"who": "Eda", "name": "Miniscope", "date": "20.05.2024", "sender": "Josh", "url": "https://www.minilabsters.com/products/the-miniscope"}, {"who": "Eda", "name": "Cestovni hra GUMP", "date": "27.05.2024", "sender": "Josh", "url": "https://www.luxor.cz/v/1993391/gump-jsme-dvojka-cestovni-hra"}, {"who": "Monicka", "name": "Terratec AirBox Pro - AirPods Pro (ruzova)", "date": "15.01.2024", "sender": "Josh", "url": "https://www.mironet.cz/terratec-airbox-pro-shining-pink-pouzdro-pro-apple-airpods-pro+dp462054/"}, {"who": "Monicka", "name": "CubeNest 3v1 MagSafe nabijecka S312", "date": "03.08.2024", "sender": "Josh", "url": "https://www.cubenest.cz/p-753/3v1-magsafe-nabijecka-s312"}, {"who": "Monicka", "name": "Povleceni - marieli.cz", "date": "09.09.2024", "sender": "Josh", "url": "https://www.marieli.cz/sety/"}, {"who": "Monicka", "name": "Bezdratova nabijecka stojanek (CubeNest)", "date": "01.08.2024", "sender": "Josh", "url": "https://www.alza.cz/search.htm?exps=Cubenest+312"}, {"who": "Eliska - narozeniny", "name": "Drevena farmarska vlakodrahna", "date": "12.02.2025", "sender": "Andreika", "url": "https://www.agatinsvet.cz/dreveny-farmarsky-vlacek/"}, {"who": "Eliska - narozeniny", "name": "Zviratka ze savany 7 ks", "date": "12.02.2025", "sender": "Andreika", "url": "https://www.agatinsvet.cz/zviratka-ze-savany-7-ks/"}, {"who": "Eliska - narozeniny", "name": "Zavodni draha PetiteMars Milky Way", "date": "20.02.2025", "sender": "Andreika", "url": "https://www.alza.cz/hracky/petitemars-zavodni-draha-milky-way-wood-of-mars-d12473966.htm"}, {"who": "Eliska - narozeniny", "name": "Smarti-book", "date": "19.02.2025", "sender": "Andreika", "url": "https://smarti-book.cz"}, {"who": "Eliska - narozeniny", "name": "Knizka Peta rika - prvni slova", "date": "12.02.2025", "sender": "Andreika", "url": "https://www.alza.cz/media/peta-rika-prvni-slova-d12539057.htm"}, {"who": "Eliska - narozeniny", "name": "SmartMax - Moje prvni safari 18 ks", "date": "25.02.2025", "sender": "Andreika", "url": "https://www.agatinsvet.cz/smartmax-moje-prvni-safari-zviratka-18-ks/"}, {"who": "Eliska - narozeniny", "name": "Geomag Magicube Shapes 25", "date": "25.02.2025", "sender": "Andreika", "url": "https://www.mall.cz/magneticke-stavebnice-geomag/geomag-magicube-shapes-25"}, {"who": "Eliska - narozeniny", "name": "Drevene barevne kostky 30 ks", "date": "25.02.2025", "sender": "Andreika", "url": "https://www.utukutu.cz/drevene-hracky/drevene-barevne-kostky-30ks/"}, {"who": "Eliska - narozeniny", "name": "Krajeni na prkenku - ovoce (Woody)", "date": "25.03.2025", "sender": "Josh", "url": "https://profimodel.cz/cs/woody/896092-krajeni-na-prkenku-ovoce-s-melounem-8591864906703.html"}, {"who": "Eliska - Vanoce", "name": "Moje prvni klasika - zvukova knizka", "date": "08.10.2024", "sender": "Andreika", "url": "https://www.alza.cz/media/moje-prvni-klasika-zvukova-knizka-d7741033.htm"}, {"who": "Eliska - Vanoce", "name": "Montessori houpacka Spectra", "date": "08.10.2024", "sender": "Andreika", "url": "https://www.utukutu.cz/montessori-houpacka-spectra/houpacka-spectra-pastelova/"}, {"who": "Eliska - Vanoce", "name": "Muffik ortopedicke puzzle dlazdice", "date": "08.10.2024", "sender": "Andreika", "url": "https://www.muffik.cz/muffik/"}, {"who": "Eliska - Vanoce", "name": "Stapelstein balancni kameny pastelove - 6 ks", "date": "08.10.2024", "sender": "Andreika", "url": "https://www.utukutu.cz/balancni-kameny-sady-po-6/stapelstein-balancni-kameny-pastelove-new-sada-6-kusu/"}, {"who": "Eliska - Vanoce", "name": "Hracka do vany Yookidoo - rozkvetla zahradka", "date": "08.10.2024", "sender": "Andreika", "url": "https://www.alza.cz/hracky/yookidoo-rozkvetla-zahradka-levne-d12363114.htm"}, {"who": "Eliska - Vanoce", "name": "Edukativni box - sada naucnych hracek", "date": "09.10.2024", "sender": "Andreika", "url": "https://www.agatinsvet.cz/sada-naucnych-hracek-pro-deti-od-1-roku-edukativni-box/"}, {"who": "Eliska - az bude vetsi", "name": "Activity board Busykids (Elis Design)", "date": "14.10.2024", "sender": "Andreika", "url": "https://www.elisdesign.cz/activity-board-busykids-domecek-pro-kluky/"}, {"who": "Eliska - az bude vetsi", "name": "Dreveny obchod Playtive (Lidl)", "date": "14.07.2025", "sender": "Andreika", "url": "https://www.lidl.cz/"}, {"who": "Eliska - az bude vetsi", "name": "RC Land Rover Defender D90 1:12", "date": "20.06.2026", "sender": "Josh", "url": "https://www.rcobchod.cz/produkty/land-rover-defender-d90-112-zluta-P87218.html"}, {"who": "Denca", "name": "Narozeninova taska", "date": "09.06.2023", "sender": "Andreika", "url": null}, {"who": "Andreika", "name": "Kniha: Kurz pro zdravy vyvoj miminka", "date": "01.12.2023", "sender": "Andreika", "url": "https://www.detskafyziomama.cz/kurz-pro-zdravy-vyvoj-miminka-kniha"}, {"who": "?", "name": "Kniha Maly princ - antikavion.cz", "date": "01.05.2024", "sender": "Josh", "url": "https://www.antikavion.cz/kniha/maly-princ-antoine-de-saint-exupery-21"}, {"who": "?", "name": "Knizka Prazsky (k)rok - grada.cz", "date": "02.07.2024", "sender": "Josh", "url": "https://www.grada.cz/prazsky-(k)rok-13454/"}, {"who": "?", "name": "Smyslove hrani ababu.cz (Elis od 2 let)", "date": "18.09.2024", "sender": "Andreika", "url": "https://ababu.cz/k/666/kreativni-tvoreni"}, {"who": "Josh", "name": "Kniha: Rodinne vylety a jine zle veci", "date": "02.06.2026", "sender": "Josh", "url": "https://www.knihydobrovsky.cz/kniha/rodinne-vylety-a-jine-zle-veci-803311784"}, {"who": "Josh", "name": "Tipik trika Cityzenwear (pro me)", "date": "27.06.2026", "sender": "Josh", "url": "https://www.cityzenwear.cz/agen-panske-tricko-bila/"}, {"who": "Josh", "name": "Tipik kosmetika Beauty of Joseon SPF50", "date": "27.06.2026", "sender": "Josh", "url": "https://www.benu.cz/beauty-of-joseon-relief-sun-rice-prob-spf50-50ml"}]};
+
+let cat = 'tripiky', sel = null, sfilt = 'all';
+let cache = {};
+let fbDb = null;
+const dot = document.getElementById('sync-dot');
+
+// ── Firebase init ──────────────────────────────────────────────────
+function initFB() {
+  if (!FIREBASE_CONFIG.apiKey) {
+    console.warn('Firebase není nastaven – používám localStorage');
+    loadFromLocalStorage();
+    dot.title = 'Offline (localStorage)';
+    return;
+  }
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fbDb = firebase.database();
+    dot.classList.add('syncing');
+    dot.title = 'Připojuji...';
+    fbDb.ref('userdata').on('value', snap => {
+      cache = snap.val() || {};
+      dot.classList.remove('syncing');
+      dot.classList.add('online');
+      dot.title = 'Online – synchronizováno';
+      renderList();
+      if (sel !== null) refreshDetail();
+    }, err => {
+      console.error('Firebase chyba:', err);
+      dot.title = 'Chyba připojení';
+      loadFromLocalStorage();
+    });
+  } catch(e) {
+    console.error(e);
+    loadFromLocalStorage();
+  }
+}
+
+function loadFromLocalStorage() {
+  // Migrate old keys
+  for(let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('dchat')) {
+      try { cache[k] = JSON.parse(localStorage.getItem(k)); } catch(e) {}
+    }
+  }
+  renderList();
+}
+
+// ── Storage helpers ────────────────────────────────────────────────
+function fbKey(c, name) {
+  return 'dchat2_' + c + '_' + name.slice(0,40).replace(/[.#$\[\]/\s]/g, '_');
+}
+function getUD(c, name) {
+  return cache[fbKey(c, name)] || {};
+}
+function setUD(c, name, obj) {
+  const k = fbKey(c, name);
+  cache[k] = obj;
+  if (fbDb) {
+    dot.classList.add('syncing');
+    fbDb.ref('userdata/' + k).set(obj).then(() => dot.classList.remove('syncing'));
+  } else {
+    localStorage.setItem(k, JSON.stringify(obj));
+  }
+}
+function saveField(c, name, field, val) {
+  const d = getUD(c, name);
+  d[field] = val;
+  setUD(c, name, d);
+}
+
+// ── Sender helpers ─────────────────────────────────────────────────
+function sk(s) {
+  if (!s) return '?';
+  const l = s.toLowerCase();
+  if (l.includes('josh')) return 'j';
+  if (l.includes('andrea') || l.includes('andreika')) return 'a';
+  if (l.includes('nutel')) return 'n';
+  return '?';
+}
+function avClass(s) { return {j:'av-j',a:'av-a',n:'av-n'}[sk(s)] || 'av-n'; }
+function avLabel(s) { return {j:'J',a:'A',n:'N'}[sk(s)] || '?'; }
+function sbClass(s) { return {j:'sb-j',a:'sb-a',n:'sb-n'}[sk(s)] || 'sb-n'; }
+
+// ── Tab & filter ───────────────────────────────────────────────────
+function switchTab(c) {
+  cat = c; sel = null;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.cat === c));
+  document.getElementById('search').value = '';
+  renderList();
+  const dp = document.getElementById('detail');
+  dp.innerHTML = '<div class="empty"><div class="icon">&#128072;</div><p>Vyber polozku vlevo</p></div>';
+  dp.classList.remove('open');
+}
+
+function setSF(f) {
+  sfilt = f;
+  ['all','j','a','n'].forEach(x => {
+    const btn = document.getElementById('sf-' + x);
+    btn.className = 'sf-btn' + (f === x ? ' act-' + x : '');
+  });
+  renderList();
+}
+
+function filtered() {
+  const q = document.getElementById('search').value.toLowerCase().trim();
+  return D[cat].filter(x => {
+    if (sfilt !== 'all' && sk(x.sender) !== sfilt) return false;
+    if (!q) return true;
+    const h = [x.name, x.date, x.sender, x.who, x.note, x.dur, x.km ? x.km+'km' : ''].filter(Boolean).join(' ').toLowerCase();
+    return h.includes(q);
+  });
+}
+
+// ── Render list ────────────────────────────────────────────────────
+function renderList() {
+  const items = filtered();
+  const body = document.getElementById('list-body');
+  body.innerHTML = '';
+  if (cat === 'darky') {
+    const groups = {};
+    items.forEach(item => { const w = item.who || '?'; if (!groups[w]) groups[w] = []; groups[w].push(item); });
+    for (const [w, arr] of Object.entries(groups)) {
+      const lbl = document.createElement('div'); lbl.className = 'group-label'; lbl.textContent = w; body.appendChild(lbl);
+      arr.forEach(item => body.appendChild(makeRow(item)));
+      const sep = document.createElement('div'); sep.className = 'separator'; body.appendChild(sep);
+    }
+  } else {
+    items.forEach(item => body.appendChild(makeRow(item)));
+  }
+}
+
+function makeRow(item) {
+  const idx = D[cat].indexOf(item);
+  const ud = getUD(cat, item.name);
+  const div = document.createElement('div');
+  div.className = 'item' + (idx === sel ? ' selected' : '') + (ud.visited ? ' visited' : '');
+  div.onclick = () => selectItem(idx);
+  // Avatar
+  const av = document.createElement('div');
+  av.className = 'avatar ' + avClass(item.sender);
+  av.textContent = avLabel(item.sender);
+  div.appendChild(av);
+  // Main
+  const main = document.createElement('div'); main.className = 'item-main';
+  const nm = document.createElement('div'); nm.className = 'item-name'; nm.textContent = item.name; main.appendChild(nm);
+  const meta = document.createElement('div'); meta.className = 'item-meta';
+  if (item.url) { const dot = document.createElement('div'); dot.className = 'link-dot'; dot.title = 'Ma odkaz'; meta.appendChild(dot); }
+  if (item.date) { const d = document.createElement('span'); d.textContent = item.date; meta.appendChild(d); }
+  if (item.km != null && cat === 'tripiky') {
+    const b = document.createElement('span'); b.className = 'dist-badge';
+    b.textContent = item.km === 0 ? 'Praha' : (item.km ? item.km + 'km · ' + item.dur : 'nelze');
+    meta.appendChild(b);
+  }
+  main.appendChild(meta); div.appendChild(main);
+  // Right
+  const right = document.createElement('div'); right.className = 'item-right';
+  if (ud.stars > 0) { const s = document.createElement('div'); s.className = 'mini-stars'; s.textContent = '★'.repeat(ud.stars); right.appendChild(s); }
+  if (ud.visited) { const v = document.createElement('div'); v.className = 'visited-check'; v.textContent = '✓'; right.appendChild(v); }
+  div.appendChild(right);
+  return div;
+}
+
+// ── Detail ─────────────────────────────────────────────────────────
+function selectItem(idx) {
+  sel = idx; renderList();
+  buildDetail();
+  const dp = document.getElementById('detail');
+  if (window.innerWidth <= 680) dp.classList.add('open');
+}
+
+function refreshDetail() { if (sel !== null) buildDetail(); }
+
+function backToList() {
+  document.getElementById('detail').classList.remove('open');
+}
+
+function buildDetail() {
+  const item = D[cat][sel];
+  const ud = getUD(cat, item.name);
+  const catLabel = {tripiky:'Tripiky', restaurace:'Restaurace & Kavarny', darky:'Darky'}[cat];
+  const visitedWord = cat === 'darky' ? 'Darovano' : 'Navstiveno';
+
+  let h = '<button class="back-btn" onclick="backToList()">&#8592; Zpět</button>';
+  h += '<div class="card">';
+  h += '<div class="card-cat ' + cat + '">' + e(catLabel) + '</div>';
+  h += '<div class="card-header">';
+  if (item.sender) {
+    h += '<span class="sender-badge ' + sbClass(item.sender) + '">' + e(item.sender) + '</span>';
+  }
+  if (item.date) h += '<span class="date-chip">' + e(item.date) + '</span>';
+  h += '</div>';
+  if (item.who && cat === 'darky') h += '<div class="card-who">Pro: ' + e(item.who) + '</div>';
+  h += '<div class="card-title">' + e(item.name) + '</div>';
+
+  if (cat === 'tripiky') {
+    if (item.km === 0) {
+      h += '<div class="dist-block"><div class="dist-item"><div class="val">&#127961;&#65039;</div><div class="lbl">v Praze</div></div></div>';
+    } else if (item.km == null) {
+      h += '<div class="dist-block"><div class="dist-item"><div class="val">&#128506;</div><div class="lbl">' + e(item.dur || 'viz odkaz') + '</div></div></div>';
+    } else {
+      h += '<div class="dist-block"><div class="dist-item"><div class="val">' + item.km + ' km</div><div class="lbl">vzdalenost</div></div><div class="dist-item"><div class="val">' + e(item.dur) + '</div><div class="lbl">jizda So 10:00</div></div></div>';
+    }
+    h += '<p class="warning">* Odhad z Dvorce, Praha &mdash; over v Google Maps</p>';
+  }
+
+  if (item.note) h += '<div class="note-box">&#128205; ' + e(item.note) + '</div>';
+
+  if (item.url) {
+    const domain = getDomain(item.url);
+    const isMaps = item.url.includes('goo.gl') || item.url.includes('maps.app') || item.url.includes('mapy.cz');
+    if (isMaps) {
+      h += '<a class="maps-link" href="' + e(item.url) + '" target="_blank" rel="noopener">&#128506; Otevrit na mape</a>';
+    } else {
+      h += '<a class="open-link" href="' + e(item.url) + '" target="_blank" rel="noopener">&#128279; ' + e(domain) + '</a>';
+    }
+  }
+  if (cat === 'tripiky') {
+    const mu = 'https://www.google.com/maps/dir/Dvorec,+Praha/' + encodeURIComponent(item.name);
+    h += '<a class="maps-link" href="' + mu + '" target="_blank" rel="noopener">&#129517; Navigovat z Dvorce</a>';
+  }
+
+  const starsVal = ud.stars || 0;
+  h += '<div class="user-section">';
+  h += '<div class="user-row"><div class="u-lbl">Hodnoceni</div><div class="stars-widget" id="sw">';
+  for (let n = 1; n <= 5; n++) h += '<button class="star-btn' + (n <= starsVal ? ' on' : '') + '" onclick="setStar(' + n + ')" data-n="' + n + '">★</button>';
+  h += '</div></div>';
+  h += '<div class="user-row"><div class="u-lbl">' + visitedWord + '</div>';
+  h += '<label class="visited-toggle' + (ud.visited ? ' checked' : '') + '" id="vtgl" onclick="toggleVisited()">';
+  h += '<div class="v-box"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+  h += '<span class="v-text" id="vtext">' + (ud.visited ? visitedWord + ' ✓' : 'Zatim ne') + '</span></label></div>';
+  h += '<div><div class="pnote-lbl">Osobni poznamka</div>';
+  h += '<textarea class="pnote-ta" id="pnote" placeholder="Zapiste cokoliv..." oninput="saveNote()">' + e(ud.note || '') + '</textarea>';
+  h += '<div class="save-hint">Ulozi se automaticky</div></div>';
+  h += '</div></div>';
+
+  document.getElementById('detail').innerHTML = h;
+}
+
+// ── User interactions ──────────────────────────────────────────────
+function setStar(n) {
+  const item = D[cat][sel]; const ud = getUD(cat, item.name);
+  const nv = ud.stars === n ? 0 : n;
+  saveField(cat, item.name, 'stars', nv);
+  document.querySelectorAll('.star-btn').forEach(b => b.classList.toggle('on', parseInt(b.dataset.n) <= nv));
+  renderList();
+}
+function toggleVisited() {
+  const item = D[cat][sel]; const ud = getUD(cat, item.name);
+  const nv = !ud.visited;
+  saveField(cat, item.name, 'visited', nv);
+  const visitedWord = cat === 'darky' ? 'Darovano' : 'Navstiveno';
+  const lbl = document.getElementById('vtgl'); const txt = document.getElementById('vtext');
+  if (nv) { lbl.className = 'visited-toggle checked'; txt.textContent = visitedWord + ' ✓'; }
+  else { lbl.className = 'visited-toggle'; txt.textContent = 'Zatim ne'; }
+  renderList();
+}
+let noteTimer = null;
+function saveNote() {
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(() => {
+    saveField(cat, D[cat][sel].name, 'note', document.getElementById('pnote').value);
+  }, 600);
+}
+
+function getDomain(url) { try { return new URL(url).hostname.replace('www.',''); } catch(e) { return url.slice(0,40); } }
+function e(s) { if (s == null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── Init ───────────────────────────────────────────────────────────
+document.getElementById('cnt-tripiky').textContent = D.tripiky.length;
+document.getElementById('cnt-restaurace').textContent = D.restaurace.length;
+document.getElementById('cnt-darky').textContent = D.darky.length;
+initFB();
+renderList();
+</script>
+</body>
+</html>
