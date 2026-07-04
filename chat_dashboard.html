@@ -231,16 +231,25 @@ function initFB() {
     fbDb = firebase.database();
     dot.classList.add('syncing');
     dot.title = 'Připojuji...';
+    const fbTimeout = setTimeout(() => {
+      dot.classList.remove('syncing');
+      dot.style.background = '#ef4444';
+      dot.title = 'Timeout – Firebase neodpovídá';
+    }, 8000);
     fbDb.ref('userdata').on('value', snap => {
+      clearTimeout(fbTimeout);
       cache = snap.val() || {};
       dot.classList.remove('syncing');
       dot.classList.add('online');
+      dot.style.background = '';
       dot.title = 'Online – synchronizováno';
       renderList();
       if (sel !== null) refreshDetail();
     }, err => {
       console.error('Firebase chyba:', err);
-      dot.title = 'Chyba připojení';
+      dot.classList.remove('syncing');
+      dot.style.background = '#ef4444';
+      dot.title = 'Chyba připojení – používám lokální data';
       loadFromLocalStorage();
     });
   } catch(e) {
