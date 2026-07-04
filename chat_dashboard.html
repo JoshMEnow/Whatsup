@@ -63,6 +63,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .item-meta{font-size:.64rem;color:#334155;display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:2px}
 .link-dot{width:5px;height:5px;border-radius:50%;background:#22c55e;flex-shrink:0}
 .dist-badge{background:#1e2a3a;color:#60a5fa;border-radius:5px;padding:1px 5px;font-size:.62rem;font-weight:600;white-space:nowrap}
+.dist-custom{background:#14291a;color:#4ade80}
+.addr-section{margin-top:10px;padding-top:10px;border-top:1px solid #1a2035}
+.addr-btn{padding:6px 12px;border-radius:7px;border:1px solid #1e3a5f;background:#0c1524;color:#60a5fa;font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.addr-btn:disabled{opacity:.5;cursor:default}
+.addr-clear-btn{margin-top:6px;padding:3px 9px;border-radius:6px;border:1px solid #2d1a1a;background:#1a0a0a;color:#ef4444;font-size:.65rem;cursor:pointer}
 .type-badge{font-size:.72rem;line-height:1;flex-shrink:0}
 .dine-type-chip{font-size:.65rem;font-weight:600;color:#94a3b8;background:#1a2035;border-radius:5px;padding:1px 6px;vertical-align:middle}
 .item-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
@@ -375,10 +380,14 @@ function makeRow(item) {
     const dt = dineType(item); t.textContent = dt === 'cafe' ? '☕' : '🍽️'; t.title = dt === 'cafe' ? 'Kavárna' : 'Restaurace';
     meta.prepend(t);
   }
-  if (item.km != null && (cat === 'tripiky' || cat === 'restaurace')) {
-    const b = document.createElement('span'); b.className = 'dist-badge';
-    b.textContent = item.km === 0 ? 'Praha' : item.km + 'km · ' + item.dur;
-    meta.appendChild(b);
+  if (cat === 'tripiky' || cat === 'restaurace') {
+    const km = ud.km_custom != null ? ud.km_custom : item.km;
+    const dur = ud.dur_custom || item.dur;
+    if (km != null) {
+      const b = document.createElement('span'); b.className = 'dist-badge' + (ud.km_custom != null ? ' dist-custom' : '');
+      b.textContent = km === 0 ? 'Praha' : km + 'km · ' + dur;
+      meta.appendChild(b);
+    }
   }
   main.appendChild(meta); div.appendChild(main);
   const right = document.createElement('div'); right.className = 'item-right';
@@ -406,15 +415,17 @@ function buildDetail() {
   h += '</div>';
   if (item.who && cat === 'darky') h += '<div class="card-who">Pro: ' + e(item.who) + '</div>';
   h += '<div class="card-title">' + e(item.name) + '</div>';
-  if (cat === 'tripiky' || (cat === 'restaurace' && item.km != null)) {
-    if (item.km === 0) {
+  if (cat === 'tripiky' || cat === 'restaurace') {
+    const km  = ud.km_custom  != null ? ud.km_custom  : item.km;
+    const dur = ud.dur_custom || item.dur;
+    if (km === 0) {
       h += '<div class="dist-block"><div class="dist-item"><div class="val">&#127961;</div><div class="lbl">v Praze</div></div></div>';
-    } else if (item.km == null) {
-      h += '<div class="dist-block"><div class="dist-item"><div class="val">&#128506;</div><div class="lbl">' + e(item.dur || 'viz odkaz') + '</div></div></div>';
-    } else {
-      h += '<div class="dist-block"><div class="dist-item"><div class="val">' + item.km + ' km</div><div class="lbl">vzdalenost</div></div><div class="dist-item"><div class="val">' + e(item.dur) + '</div><div class="lbl">jizda So 10:00</div></div></div>';
+    } else if (km != null) {
+      const lbl = ud.km_custom != null ? 'vzdalenost (vlastni)' : 'vzdalenost';
+      h += '<div class="dist-block"><div class="dist-item"><div class="val">' + km + ' km</div><div class="lbl">' + lbl + '</div></div><div class="dist-item"><div class="val">' + e(dur) + '</div><div class="lbl">odhad jizdy</div></div></div>';
+      if (ud.km_custom != null) h += '<button class="addr-clear-btn" onclick="clearAddr()">× Smazat vlastní vzdálenost</button>';
     }
-    if (cat === 'tripiky') h += '<p class="warning">* Odhad z Dvorce, Praha</p>';
+    if (cat === 'tripiky' && item.km != null) h += '<p class="warning">* Odhad z Dvorce, Praha</p>';
   }
   if (item.note) h += '<div class="note-box">&#128205; ' + e(item.note) + '</div>';
   if (item.url) {
@@ -434,7 +445,13 @@ function buildDetail() {
   h += '<div class="v-box"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
   h += '<span class="v-text" id="vtext">' + (ud.visited ? visitedWord + ' ✓' : 'Zatim ne') + '</span></label></div>';
   h += '<div><div class="pnote-lbl">Osobni poznamka</div><textarea class="pnote-ta" id="pnote" placeholder="Zapiste cokoliv..." oninput="saveNote()">' + e(ud.note || '') + '</textarea>';
-  h += '<div class="save-hint">Ulozi se automaticky</div></div></div></div>';
+  h += '<div class="save-hint">Ulozi se automaticky</div></div>';
+  if (cat === 'tripiky' || cat === 'restaurace') {
+    h += '<div class="addr-section"><div class="pnote-lbl">Adresa</div>';
+    h += '<div style="display:flex;gap:6px;margin-top:4px"><input type="text" id="addr-input" class="pnote-ta" style="min-height:0;padding:6px 9px;flex:1" placeholder="např. Rámová 4, Praha" value="' + e(ud.address || '') + '"><button class="addr-btn" onclick="calcAddr()">↗ km</button></div>';
+    h += '<div class="save-hint" id="addr-hint">Spočítá vzdálenost od Dvorce a uloží do Firebase</div></div>';
+  }
+  h += '</div></div>';
   document.getElementById('detail').innerHTML = h;
 }
 function setStar(n) {
@@ -456,6 +473,44 @@ let noteTimer = null;
 function saveNote() {
   clearTimeout(noteTimer);
   noteTimer = setTimeout(() => { saveField(cat, D[cat][sel].name, 'note', document.getElementById('pnote').value); }, 600);
+}
+async function calcAddr() {
+  const input = document.getElementById('addr-input');
+  const hint  = document.getElementById('addr-hint');
+  const btn   = document.querySelector('.addr-btn');
+  const addr  = input ? input.value.trim() : '';
+  if (!addr) { if (hint) hint.textContent = 'Zadej adresu.'; return; }
+  btn.textContent = '⏳'; btn.disabled = true;
+  if (hint) hint.textContent = 'Hledám...';
+  try {
+    const params = new URLSearchParams({q: addr, format: 'json', limit: 1});
+    const resp = await fetch('https://nominatim.openstreetmap.org/search?' + params, {headers:{'Accept':'application/json'}});
+    const res  = await resp.json();
+    if (!res.length) {
+      if (hint) hint.textContent = 'Adresa nenalezena — upřesni (přidej město).';
+      btn.textContent = '↗ km'; btn.disabled = false; return;
+    }
+    const lat = parseFloat(res[0].lat), lon = parseFloat(res[0].lon);
+    const R = 6371, dLat = (lat-50.0166)*Math.PI/180, dLon = (lon-14.4239)*Math.PI/180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(50.0166*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLon/2)**2;
+    const straight = R*2*Math.asin(Math.sqrt(a));
+    const km = Math.round(straight*1.35);
+    const mins = Math.round(km/45*60);
+    const dur  = mins < 60 ? mins+'min' : Math.floor(mins/60)+'h '+(mins%60?mins%60+'min':'');
+    const item = D[cat][sel]; const ud = getUD(cat, item.name);
+    ud.km_custom = km; ud.dur_custom = dur; ud.address = addr;
+    setUD(cat, item.name, ud);
+    renderList(); buildDetail();
+  } catch(err) {
+    if (hint) hint.textContent = 'Chyba: ' + err.message;
+    btn.textContent = '↗ km'; btn.disabled = false;
+  }
+}
+function clearAddr() {
+  const item = D[cat][sel]; const ud = getUD(cat, item.name);
+  delete ud.km_custom; delete ud.dur_custom; delete ud.address;
+  setUD(cat, item.name, ud);
+  renderList(); buildDetail();
 }
 function getDomain(url) { try { return new URL(url).hostname.replace('www.',''); } catch(e) { return url.slice(0,40); } }
 function e(s) { if (s == null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
