@@ -169,6 +169,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div style="display:flex;gap:3px;flex-shrink:0">
         <button class="sf-btn sort-btn" data-dir="asc"  onclick="setSort('asc')"  title="Seřadit ↑ km">↑ km</button>
         <button class="sf-btn sort-btn" data-dir="desc" onclick="setSort('desc')" title="Seřadit ↓ km">↓ km</button>
+        <button class="sf-btn sort-btn" data-dir="null-first" onclick="setSort('null-first')" title="Bez km nahoru">? km</button>
       </div>
     </div>
     <div class="filter-bar" id="type-filter-bar" style="display:none;padding-top:0">
@@ -180,6 +181,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <div style="display:flex;gap:3px;flex-shrink:0">
         <button class="sf-btn sort-btn" data-dir="asc"  onclick="setSort('asc')"  title="Seřadit ↑ km">↑ km</button>
         <button class="sf-btn sort-btn" data-dir="desc" onclick="setSort('desc')" title="Seřadit ↓ km">↓ km</button>
+        <button class="sf-btn sort-btn" data-dir="null-first" onclick="setSort('null-first')" title="Bez km nahoru">? km</button>
       </div>
     </div>
     <div class="list-body" id="list-body"></div>
@@ -331,6 +333,12 @@ function filtered() {
   });
   if (sortDir) {
     items = [...items].sort((a, b) => {
+      if (sortDir === 'null-first') {
+        if (a.km == null && b.km == null) return 0;
+        if (a.km == null) return -1;
+        if (b.km == null) return 1;
+        return 0;
+      }
       if (a.km == null && b.km == null) return 0;
       if (a.km == null) return 1;
       if (b.km == null) return -1;
