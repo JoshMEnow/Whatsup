@@ -9,6 +9,7 @@
 <title>Dzwirovaci chytrackovani</title>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <style>:root {
   --bg: #0f1117;
   --bg2: #131929;
@@ -130,6 +131,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .tab[data-cat="darky"].active{background:#7c2d12}
 .tab[data-cat="zabava"].active{background:#4c1d95}
 .tab[data-cat="ostatni"].active{background:var(--t8)}
+.tab[data-cat="mapa"].active{background:#164e63}
+#map-panel{display:none;flex:1;flex-direction:column;overflow:hidden}
+#map-el{flex:1}
+.map-topbar{padding:7px 10px;background:var(--bg2);border-bottom:1px solid var(--brd1);display:flex;gap:6px;align-items:center;flex-shrink:0}
+.map-cat-btn{padding:4px 12px;border-radius:99px;border:1px solid var(--brd2);background:var(--bg3);color:var(--t5);font-size:.72rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .12s}
+.map-cat-btn.on-t{background:#0e2a4a;color:#7ab8f5;border-color:#1e4a7a}
+.map-cat-btn.on-r{background:#0c2a10;color:#7aba5a;border-color:#1a5020}
+.map-cat-btn.off{opacity:.4}
+.leaflet-popup-content-wrapper{background:var(--bg4)!important;border:1px solid var(--brd2)!important;border-radius:10px!important;color:var(--t2)!important;box-shadow:0 6px 24px rgba(0,0,0,.5)!important}
+.leaflet-popup-tip{background:var(--bg4)!important}
+.leaflet-popup-close-button{color:var(--t5)!important;top:7px!important;right:9px!important}
+.leaflet-popup-close-button:hover{color:var(--t1)!important}
+.leaflet-control-zoom a{background:var(--bg4)!important;border-color:var(--brd2)!important;color:var(--t3)!important}
+.leaflet-control-zoom a:hover{background:var(--bg5)!important;color:var(--t1)!important}
+.leaflet-control-attribution{background:rgba(15,17,23,.75)!important;color:var(--t7)!important;font-size:9px!important}
+.leaflet-control-attribution a{color:var(--t6)!important}
 .card-cat.zabava{color:#a78bfa}
 .card-cat.ostatni{color:var(--t4)}
 .zab-type-chip{font-size:.65rem;font-weight:600;color:var(--t4);background:var(--brd1);border-radius:5px;padding:1px 6px;vertical-align:middle}
@@ -263,6 +280,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <button class="tab" data-cat="darky" onclick="switchTab('darky')">&#127873; D&aacute;rky <span class="tab-count" id="cnt-darky"></span></button>
   <button class="tab" data-cat="zabava" onclick="switchTab('zabava')">&#127917; Z&aacute;bava <span class="tab-count" id="cnt-zabava"></span></button>
   <button class="tab" data-cat="ostatni" onclick="switchTab('ostatni')">&#128230; Ostatn&iacute; <span class="tab-count" id="cnt-ostatni"></span></button>
+  <button class="tab" data-cat="mapa" onclick="switchTab('mapa')">&#128506; Mapa</button>
 </div>
 <div class="main">
   <div class="list-panel">
@@ -319,6 +337,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <div class="detail-panel" id="detail">
     <div class="empty"><div class="icon">&#128072;</div><p>Vyber polozku vlevo</p></div>
   </div>
+</div>
+<div id="map-panel">
+  <div class="map-topbar">
+    <button class="map-cat-btn on-t" id="mbt-t" onclick="mpToggle('t')">&#11044; Tripiky</button>
+    <button class="map-cat-btn on-r" id="mbt-r" onclick="mpToggle('r')">&#11044; Dine&amp;Caf&eacute;</button>
+    <span id="map-status" style="margin-left:auto;font-size:.65rem;color:var(--t7)"></span>
+  </div>
+  <div id="map-el"></div>
 </div>
 <script>
 const FIREBASE_CONFIG = {
@@ -416,6 +442,10 @@ function dineType(item) {
 function switchTab(c) {
   cat = c; sel = null; tfilt = 'all'; gfilt = 'all'; zabfilt = 'all'; sortDir = null;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.cat === c));
+  const isMap = c === 'mapa';
+  document.querySelector('.main').style.display = isMap ? 'none' : '';
+  document.getElementById('map-panel').style.display = isMap ? 'flex' : 'none';
+  if (isMap) { initMap(); return; }
   document.getElementById('search').value = '';
   document.getElementById('darky-filter-bar').style.display = c === 'darky'      ? '' : 'none';
   document.getElementById('geo-filter-bar').style.display  = c === 'tripiky'    ? '' : 'none';
@@ -713,6 +743,103 @@ function toggleTheme() {
 })();
 initFB();
 renderList();
+
+// ── MAP TAB ──────────────────────────────────────────────────────────────────
+let leafletMap = null;
+const mpLayers = { t: null, r: null };
+const mpVis = { t: true, r: true };
+const GEO_CACHE_KEY = 'dchat2_geo_v1';
+let geoCache = {};
+try { geoCache = JSON.parse(localStorage.getItem(GEO_CACHE_KEY) || '{}'); } catch(e) {}
+function saveGeoCache() { try { localStorage.setItem(GEO_CACHE_KEY, JSON.stringify(geoCache)); } catch(e) {} }
+
+function mpIcon(fill, stroke) {
+  const svg = `<svg width="24" height="32" viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.37 0 0 5.37 0 12c0 9 12 20 12 20S24 21 24 12C24 5.37 18.63 0 12 0z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/><circle cx="12" cy="12" r="4" fill="rgba(255,255,255,.6)"/></svg>`;
+  return L.divIcon({ className:'', html:svg, iconSize:[24,32], iconAnchor:[12,32], popupAnchor:[0,-34] });
+}
+
+function mpToggle(cat_) {
+  mpVis[cat_] = !mpVis[cat_];
+  document.getElementById('mbt-' + cat_).className = 'map-cat-btn' + (mpVis[cat_] ? ' on-' + cat_ : ' off');
+  if (!leafletMap) return;
+  if (mpVis[cat_]) mpLayers[cat_].addTo(leafletMap);
+  else leafletMap.removeLayer(mpLayers[cat_]);
+}
+
+function mpSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function geocodeItem(name, isTripiky) {
+  if (name in geoCache) return geoCache[name];
+  const q = name + (isTripiky ? ' Česko' : ' Praha');
+  try {
+    const resp = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q), { headers: {'User-Agent':'dchat-dashboard/1.0'} });
+    const j = await resp.json();
+    const coord = j.length ? [parseFloat(j[0].lat), parseFloat(j[0].lon)] : null;
+    geoCache[name] = coord; saveGeoCache(); return coord;
+  } catch(_) { return null; }
+}
+
+function addMapMarker(item, coord) {
+  const c = item._cat;
+  const catLabel = c === 't' ? 'Tripiky' : 'Dine&amp;Café';
+  const catColor = c === 't' ? '#7ab8f5' : '#7aba5a';
+  const fill = c === 't' ? '#2d7dd2' : '#4a8f1a';
+  const stroke = c === 't' ? '#185FA5' : '#1a5a08';
+  const linkHtml = item.url ? `<a href="${e(item.url)}" target="_blank" style="font-size:.68rem;color:#60a5fa;text-decoration:none;display:block;margin-top:6px;">Otevřít odkaz ↗</a>` : '';
+  const kmHtml = item.km != null ? `<div style="font-size:.65rem;color:#64748b;margin-top:2px;">${item.km} km · ${item.dur||''}</div>` : '';
+  const noteHtml = item.note ? `<div style="font-size:.65rem;color:#64748b;margin-top:1px;">${e(item.note)}</div>` : '';
+  const popup = `<div style="min-width:160px;line-height:1.4;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${catColor};margin-bottom:3px;">${catLabel}</div><div style="font-size:.82rem;font-weight:700;color:#f1f5f9;margin-bottom:1px;">${e(item.name)}</div>${noteHtml}${kmHtml}${linkHtml}</div>`;
+  L.marker(coord, { icon: mpIcon(fill, stroke) })
+    .bindPopup(popup, { maxWidth:240 })
+    .addTo(mpLayers[c]);
+  if (!mpVis[c]) mpLayers[c].remove();
+}
+
+async function loadMapMarkers() {
+  const status = document.getElementById('map-status');
+  const all = [
+    ...D.tripiky.map(x => ({...x, _cat:'t'})),
+    ...D.restaurace.map(x => ({...x, _cat:'r'}))
+  ];
+  const toGeocode = all.filter(x => !(x.name in geoCache));
+  // Render cached first
+  all.filter(x => x.name in geoCache && geoCache[x.name]).forEach(x => addMapMarker(x, geoCache[x.name]));
+  if (status) status.textContent = toGeocode.length ? `Geocoding 0/${toGeocode.length}…` : `${all.length} míst`;
+  // Geocode uncached with rate limiting (Nominatim: 1 req/s)
+  let done = 0;
+  for (const item of toGeocode) {
+    if (cat !== 'mapa') break;
+    done++;
+    if (status) status.textContent = `Geocoding ${done}/${toGeocode.length}…`;
+    const coord = await geocodeItem(item.name, item._cat === 't');
+    if (coord) addMapMarker(item, coord);
+    await mpSleep(1100);
+  }
+  if (status && cat === 'mapa') status.textContent = `${all.filter(x=>geoCache[x.name]).length} míst na mapě`;
+}
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    if (window.L) { res(); return; }
+    const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+async function initMap() {
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js');
+  if (leafletMap) { setTimeout(() => leafletMap.invalidateSize(), 80); return; }
+  leafletMap = L.map('map-el').setView([50.08, 14.43], 12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com">CARTO</a>',
+    subdomains: 'abcd', maxZoom: 19
+  }).addTo(leafletMap);
+  mpLayers.t = L.layerGroup().addTo(leafletMap);
+  mpLayers.r = L.layerGroup().addTo(leafletMap);
+  setTimeout(() => leafletMap.invalidateSize(), 80);
+  loadMapMarkers();
+}
+// ─────────────────────────────────────────────────────────────────────────────
 </script>
 </body>
 </html>
