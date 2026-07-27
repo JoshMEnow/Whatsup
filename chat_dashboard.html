@@ -140,6 +140,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .map-cat-btn.on-r{background:#0c2a10;color:#7aba5a;border-color:#1a5020}
 .map-cat-btn.off{opacity:.4}
 .leaflet-popup-content-wrapper{background:var(--bg4)!important;border:1px solid var(--brd2)!important;border-radius:10px!important;color:var(--t2)!important;box-shadow:0 6px 24px rgba(0,0,0,.5)!important}
+.mp-pop-cat{font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
+.mp-pop-cat.t{color:#60a5fa}.mp-pop-cat.r{color:#34d399}
+.mp-pop-link{font-size:.68rem;color:#60a5fa;text-decoration:none;display:block;margin-top:6px}
+[data-theme="light"] .mp-pop-cat.t,[data-theme="light"] .mp-pop-link{color:#185FA5}
+[data-theme="light"] .mp-pop-cat.r{color:#1a5a08}
+@media(prefers-color-scheme:light){body:not([data-theme="dark"]) .mp-pop-cat.t,body:not([data-theme="dark"]) .mp-pop-link{color:#185FA5}body:not([data-theme="dark"]) .mp-pop-cat.r{color:#1a5a08}}
 .leaflet-popup-tip{background:var(--bg4)!important}
 .leaflet-popup-close-button{color:var(--t5)!important;top:7px!important;right:9px!important}
 .leaflet-popup-close-button:hover{color:var(--t1)!important}
@@ -800,13 +806,12 @@ async function geocodeItem(name, isTripiky) {
 function addMapMarker(item, coord) {
   const c = item._cat;
   const catLabel = c === 't' ? 'Tripiky' : 'Dine&amp;Café';
-  const catColor = c === 't' ? '#7ab8f5' : '#7aba5a';
   const fill = c === 't' ? '#2d7dd2' : '#4a8f1a';
   const stroke = c === 't' ? '#185FA5' : '#1a5a08';
-  const linkHtml = item.url ? `<a href="${e(item.url)}" target="_blank" style="font-size:.68rem;color:#60a5fa;text-decoration:none;display:block;margin-top:6px;">Otevřít odkaz ↗</a>` : '';
-  const kmHtml = item.km != null ? `<div style="font-size:.65rem;color:#64748b;margin-top:2px;">${item.km} km · ${item.dur||''}</div>` : '';
-  const noteHtml = item.note ? `<div style="font-size:.65rem;color:#64748b;margin-top:1px;">${e(item.note)}</div>` : '';
-  const popup = `<div style="min-width:160px;line-height:1.4;"><div style="font-size:.58rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${catColor};margin-bottom:3px;">${catLabel}</div><div style="font-size:.82rem;font-weight:700;color:#f1f5f9;margin-bottom:1px;">${e(item.name)}</div>${noteHtml}${kmHtml}${linkHtml}</div>`;
+  const linkHtml = item.url ? `<a href="${e(item.url)}" target="_blank" class="mp-pop-link">Otevřít odkaz ↗</a>` : '';
+  const kmHtml = item.km != null ? `<div style="font-size:.65rem;color:var(--t6);margin-top:2px;">${item.km} km · ${item.dur||''}</div>` : '';
+  const noteHtml = item.note ? `<div style="font-size:.65rem;color:var(--t6);margin-top:1px;">${e(item.note)}</div>` : '';
+  const popup = `<div style="min-width:160px;line-height:1.4;"><div class="mp-pop-cat ${c}">${catLabel}</div><div style="font-size:.82rem;font-weight:700;color:var(--t1);margin-bottom:1px;">${e(item.name)}</div>${noteHtml}${kmHtml}${linkHtml}</div>`;
   L.marker(coord, { icon: mpIcon(fill, stroke) })
     .bindPopup(popup, { maxWidth:240 })
     .addTo(mpLayers[c]);
