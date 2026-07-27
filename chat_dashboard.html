@@ -729,6 +729,7 @@ function toggleTheme() {
   document.body.setAttribute('data-theme', next);
   localStorage.setItem('theme', next);
   document.getElementById('theme-toggle').textContent = next === 'light' ? '🌙' : '☀️';
+  updateMapTiles();
 }
 (function() {
   const saved = localStorage.getItem('theme');
@@ -745,8 +746,25 @@ initFB();
 renderList();
 
 // ── MAP TAB ──────────────────────────────────────────────────────────────────
-let leafletMap = null;
+let leafletMap = null, mpTileLayer = null;
 const mpLayers = { t: null, r: null };
+function mpIsLight() {
+  const t = document.body.getAttribute('data-theme');
+  return t === 'light' || (!t && window.matchMedia('(prefers-color-scheme: light)').matches);
+}
+function mpTileUrl() {
+  return mpIsLight()
+    ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+}
+function updateMapTiles() {
+  if (!leafletMap) return;
+  if (mpTileLayer) leafletMap.removeLayer(mpTileLayer);
+  mpTileLayer = L.tileLayer(mpTileUrl(), {
+    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com">CARTO</a>',
+    subdomains: 'abcd', maxZoom: 19
+  }).addTo(leafletMap);
+}
 const mpVis = { t: true, r: true };
 const GEO_CACHE_KEY = 'dchat2_geo_v1';
 let geoCache = {};
@@ -830,10 +848,7 @@ async function initMap() {
   await loadScript('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js');
   if (leafletMap) { setTimeout(() => leafletMap.invalidateSize(), 80); return; }
   leafletMap = L.map('map-el').setView([50.08, 14.43], 12);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com">CARTO</a>',
-    subdomains: 'abcd', maxZoom: 19
-  }).addTo(leafletMap);
+  updateMapTiles();
   mpLayers.t = L.layerGroup().addTo(leafletMap);
   mpLayers.r = L.layerGroup().addTo(leafletMap);
   setTimeout(() => leafletMap.invalidateSize(), 80);
