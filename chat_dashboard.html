@@ -752,7 +752,7 @@ initFB();
 renderList();
 
 // ── MAP TAB ──────────────────────────────────────────────────────────────────
-let leafletMap = null, mpTileLayer = null;
+let leafletMap = null, mpTileLayer = null, mpGeocoding = false;
 const mpLayers = { t: null, r: null };
 function mpIsLight() {
   const t = document.body.getAttribute('data-theme');
@@ -819,26 +819,26 @@ function addMapMarker(item, coord) {
 }
 
 async function loadMapMarkers() {
-  const status = document.getElementById('map-status');
+  if (mpGeocoding) return;
+  mpGeocoding = true;
   const all = [
     ...D.tripiky.map(x => ({...x, _cat:'t'})),
     ...D.restaurace.map(x => ({...x, _cat:'r'}))
   ];
   const toGeocode = all.filter(x => !(x.name in geoCache));
-  // Render cached first
   all.filter(x => x.name in geoCache && geoCache[x.name]).forEach(x => addMapMarker(x, geoCache[x.name]));
-  if (status) status.textContent = toGeocode.length ? `Geocoding 0/${toGeocode.length}…` : `${all.length} míst`;
-  // Geocode uncached with rate limiting (Nominatim: 1 req/s)
+  const setStatus = t => { const s = document.getElementById('map-status'); if (s && cat === 'mapa') s.textContent = t; };
+  setStatus(toGeocode.length ? `Geocoding 0/${toGeocode.length}…` : `${all.length} míst`);
   let done = 0;
   for (const item of toGeocode) {
-    if (cat !== 'mapa') break;
     done++;
-    if (status) status.textContent = `Geocoding ${done}/${toGeocode.length}…`;
+    setStatus(`Geocoding ${done}/${toGeocode.length}…`);
     const coord = await geocodeItem(item.name, item._cat === 't');
     if (coord) addMapMarker(item, coord);
     await mpSleep(1100);
   }
-  if (status && cat === 'mapa') status.textContent = `${all.filter(x=>geoCache[x.name]).length} míst na mapě`;
+  setStatus(`${all.filter(x=>geoCache[x.name]).length} míst na mapě`);
+  mpGeocoding = false;
 }
 
 function loadScript(src) {
@@ -851,7 +851,7 @@ function loadScript(src) {
 
 async function initMap() {
   await loadScript('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js');
-  if (leafletMap) { setTimeout(() => leafletMap.invalidateSize(), 80); return; }
+  if (leafletMap) { setTimeout(() => leafletMap.invalidateSize(), 80); loadMapMarkers(); return; }
   leafletMap = L.map('map-el').setView([50.08, 14.43], 12);
   updateMapTiles();
   mpLayers.t = L.layerGroup().addTo(leafletMap);
