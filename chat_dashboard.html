@@ -827,14 +827,15 @@ async function loadMapMarkers() {
   ];
   const toGeocode = all.filter(x => !(x.name in geoCache));
   all.filter(x => x.name in geoCache && geoCache[x.name]).forEach(x => addMapMarker(x, geoCache[x.name]));
+  let cached = all.length - toGeocode.length;
   const setStatus = t => { const s = document.getElementById('map-status'); if (s && cat === 'mapa') s.textContent = t; };
-  setStatus(toGeocode.length ? `Geocoding 0/${toGeocode.length}…` : `${all.length} míst`);
+  setStatus(toGeocode.length ? `geocoding 0/${cached}/${all.length}` : `${all.length} míst na mapě`);
   let done = 0;
   for (const item of toGeocode) {
     done++;
-    setStatus(`Geocoding ${done}/${toGeocode.length}…`);
+    setStatus(`geocoding ${done}/${cached}/${all.length}`);
     const coord = await geocodeItem(item.name, item._cat === 't');
-    if (coord) addMapMarker(item, coord);
+    if (coord) { addMapMarker(item, coord); cached++; }
     await mpSleep(1100);
   }
   setStatus(`${all.filter(x=>geoCache[x.name]).length} míst na mapě`);
