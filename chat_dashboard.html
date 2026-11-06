@@ -492,10 +492,8 @@ function switchTab(c) {
   document.querySelector('.main').style.display = isMap ? 'none' : '';
   document.getElementById('map-panel').style.display = isMap ? 'flex' : 'none';
   if (isMap) { initMap(); return; }
-  if (c === 'kn') { knfilt = 'all'; buildKNFilter(); }
-  if (c !== 'kn') restoreSF();
+  if (c === 'kn') { knfilt = 'all'; buildKNFilter(); } else { restoreSF(); }
   if (c === 'tripiky') {
-    // inject Elis filter button
     const fb = document.getElementById('filter-bar');
     if (fb && !document.getElementById('elis-btn')) {
       const btn = document.createElement('button');
@@ -509,7 +507,6 @@ function switchTab(c) {
     if (eb) eb.remove();
     elisfilt = false;
   }
-  else { restoreSF(); }
   document.getElementById('search').value = '';
   document.getElementById('darky-filter-bar').style.display = c === 'darky'      ? '' : 'none';
   document.getElementById('geo-filter-bar').style.display  = c === 'tripiky'    ? '' : 'none';
